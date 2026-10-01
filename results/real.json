@@ -1,0 +1,46 @@
+{
+  "setup": {
+    "model": "Qwen3-8B bf16, RTX 3090 Ti",
+    "max_new_tokens": 200,
+    "drafter": "prompt lookup, n<=3, k=8"
+  },
+  "code_edit": {
+    "prompt_tokens": 159,
+    "greedy_tok_per_s": 41.5,
+    "spec_tok_per_s": 137.2,
+    "speedup": 3.31,
+    "target_passes": {
+      "greedy": 200,
+      "speculative": 54
+    },
+    "draft_tokens_accepted": 147,
+    "identical_tokens": "200/200",
+    "first_difference_at": null
+  },
+  "passage_qa": {
+    "prompt_tokens": 478,
+    "greedy_tok_per_s": 41.4,
+    "spec_tok_per_s": 79.8,
+    "speedup": 1.93,
+    "target_passes": {
+      "greedy": 200,
+      "speculative": 91
+    },
+    "draft_tokens_accepted": 110,
+    "identical_tokens": "83/200",
+    "first_difference_at": 82
+  },
+  "open_continuation": {
+    "prompt_tokens": 451,
+    "greedy_tok_per_s": 41.4,
+    "spec_tok_per_s": 48.4,
+    "speedup": 1.17,
+    "target_passes": {
+      "greedy": 200,
+      "speculative": 153
+    },
+    "draft_tokens_accepted": 48,
+    "identical_tokens": "200/200",
+    "first_difference_at": null
+  }
+}

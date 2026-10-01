@@ -1,0 +1,12 @@
+{
+  "first_difference_at": 82,
+  "greedy_token": " a",
+  "spec_token": " rather",
+  "logit_of_greedy_token": 35.0,
+  "logit_of_spec_token": 35.0,
+  "top2_margin_full_pass": 0.0,
+  "top2_tokens_full_pass": [
+    " rather",
+    " a"
+  ]
+}

@@ -1,42 +1,47 @@
 # Speculative Decoding
 
-Speculative decoding (also known as speculative decoding) is a technique to accelerate autoregressive language model inference. Instead of generating one token at a time, a small draft model proposes multiple candidate tokens in parallel, and a larger target model verifies them in a single forward pass using rejection sampling.
+**Lossless greedy speculative decoding for Hugging Face models, with no draft model: up to 3.3× faster generation on Qwen3-8B, with identical output.**
 
-## Implementation Details
+A drafter guesses the next 8 tokens by looking the last few tokens up earlier in the text (prompt lookup). The full model checks all 8 guesses in **one** forward pass over its KV cache, keeps the longest run that matches what it would have generated anyway, and adds one token of its own. Rejected guesses are cropped from the cache. The output is the same as plain greedy decoding; only the number of full-model passes changes.
 
-- **DraftModel**: Uses a lightweight n-gram predictor to propose candidates based on recent context history.
-- **TargetModel**: Provides logits for verification via logit comparison.
-- **Rejection Sampling Loop**: Accepts draft tokens with probability proportional to the ratio of target to draft probabilities.
+## Results (Qwen3-8B, bf16, one RTX 3090 Ti, 200 new tokens)
 
-### Benchmark Results
+| Task | Plain greedy | Speculative | Speedup | Model passes | Output identical? |
+|---|---|---|---|---|---|
+| Add type hints to a code snippet | 41.5 tok/s | 137.2 tok/s | **3.31×** | 200 → 54 | 200/200 tokens |
+| Copy the first sentences of a passage | 41.4 tok/s | 79.8 tok/s | **1.93×** | 200 → 91 | see below |
+| Continue a Wikipedia passage freely | 41.4 tok/s | 48.4 tok/s | **1.17×** | 200 → 153 | 200/200 tokens |
 
-On synthetic data (vocab=50, steps=10), the implementation typically achieves 40–60% acceptance rates, demonstrating the trade-off between draft quality and target verification.
+The speedup tracks how much of the output already appears in the prompt: code edits and quoting repeat a lot, free continuation repeats little. It never made generation slower in these runs, because a failed guess costs almost nothing extra (verifying 9 tokens takes about as long as generating 1 on a GPU at this size).
 
-For real model benchmarks, see [RESULTS.md](RESULTS.md).
+**Passage-copy divergence, explained:** the outputs match for 82 tokens, then differ. At that step the model's top two choices (" rather" and " a") have exactly the same logit, 35.0 vs 35.0. Plain greedy and the multi-token verify pass run slightly different bf16 arithmetic, so they break the tie differently. Every later token follows from that. It is a numerical tie, not a logic error ([`results/divergence.json`](results/divergence.json)); in fp32, or with ties broken by token id, both paths would agree.
 
-### Usage
+Full numbers: [`results/real.json`](results/real.json).
+
+## Honest notes
+
+- Prompt lookup drafting is a known idea (Saxena, 2023, "prompt lookup decoding"); this repo is a small, readable implementation of it, with correctness checked against plain greedy and real timings on an 8B model.
+- **An earlier version of this repo was wrong.** Its "draft" was the full model itself, and each guess was checked with another uncached full pass, so it did up to 4× the work per token and ran at 0.65× on distilgpt2. That code (`src/spec_decode/core.py`) is kept only as a toy rejection-sampling example; the real implementation is `src/spec_decode/real.py`.
+- Greedy decoding only (no sampling), batch size 1, one run per task.
+
+## Usage
 
 ```python
-import numpy as np
-from src.spec_decode.core import DraftModel, TargetModel, rejection_sampling
+from spec_decode.real import speculative, greedy
 
-draft = DraftModel(ngram_order=2, vocab_size=100)
-target = TargetModel(vocab_size=100)
+ids = tokenizer(prompt, return_tensors="pt").input_ids.cuda()
+tokens, passes, accepted = speculative(model, ids, max_new=200, k=8)
+```
 
-# Train draft model on some sequence
-seq = np.random.randint(0, 100, 100)
-draft.train(seq)
+Reproduce (needs a local Qwen3-8B and about 17 GB of GPU memory):
 
-# Generate tokens
-tokens = rejection_sampling(draft, target, max_steps=20)
-print(f"Accepted tokens: {len(tokens)}")
+```bash
+python results/run_real.py
+python results/check_divergence.py
 ```
 
 ## Tests
 
-Run the test suite with:
 ```bash
-pytest tests/ -q
+PYTHONPATH=src python -m pytest tests/
 ```
-
-**Measured status:** Measured on distilgpt2 (82M), not yet on Qwen. Speculative decoding was slower than plain decoding here: 60.5 vs 92.9 tokens/s (0.65x).
