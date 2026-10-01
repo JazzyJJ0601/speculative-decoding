@@ -12,6 +12,8 @@ Speculative decoding (also known as speculative decoding) is a technique to acce
 
 On synthetic data (vocab=50, steps=10), the implementation typically achieves 40–60% acceptance rates, demonstrating the trade-off between draft quality and target verification.
 
+For real model benchmarks, see [RESULTS.md](RESULTS.md).
+
 ### Usage
 
 ```python
@@ -36,3 +38,5 @@ Run the test suite with:
 ```bash
 pytest tests/ -q
 ```
+
+**Measured status:** Measured on distilgpt2 (82M), not yet on Qwen. Speculative decoding was slower than plain decoding here: 60.5 vs 92.9 tokens/s (0.65x).
